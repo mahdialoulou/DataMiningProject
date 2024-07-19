@@ -2,13 +2,12 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from sklearn.impute import KNNImputer
-from sklearn.preprocessing import MinMaxScaler, StandardScaler, RobustScaler, Normalizer, PowerTransformer, \
-    QuantileTransformer, LabelEncoder, MultiLabelBinarizer
+from sklearn.preprocessing import MinMaxScaler, StandardScaler, RobustScaler, Normalizer, PowerTransformer, QuantileTransformer, LabelEncoder, MultiLabelBinarizer
 from sklearn.cluster import KMeans, DBSCAN, AgglomerativeClustering
 from sklearn.decomposition import PCA
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import mean_squared_error, accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import mean_squared_error, accuracy_score, precision_score, recall_score, f1_score, roc_curve, auc
 import matplotlib.pyplot as plt
 import seaborn as sns
 from minisom import MiniSom  # Assuming you have the MiniSom library installed
@@ -38,29 +37,19 @@ if uploaded_file is not None:
 
     # Display the first and last few lines of the dataframe
     st.write("### First few lines of the data")
-    st.write("""
-    #### Description
-    This section allows users to preview the first and last few lines of the dataset to ensure correct loading.
-    """)
+    st.write("#### Description\nThis section allows users to preview the first and last few lines of the dataset to ensure correct loading.")
     st.write(df.head())
-
     st.write("### Last few lines of the data")
     st.write(df.tail())
 
     # Provide a basic statistical summary
     st.write("### Statistical Summary")
-    st.write("""
-    #### Description
-    This section provides a basic statistical summary of the dataset, including measures such as mean, median, standard deviation, and quartiles for numeric columns.
-    """)
+    st.write("#### Description\nThis section provides a basic statistical summary of the dataset, including measures such as mean, median, standard deviation, and quartiles for numeric columns.")
     st.write(df.describe())
 
     # Basic information about the data
     st.write("### Data Information")
-    st.write("""
-    #### Description
-    This section provides basic information about the dataset, including the number of rows and columns, data types of each column, and memory usage.
-    """)
+    st.write("#### Description\nThis section provides basic information about the dataset, including the number of rows and columns, data types of each column, and memory usage.")
     buffer = io.StringIO()
     df.info(buf=buffer)
     s = buffer.getvalue()
@@ -68,10 +57,7 @@ if uploaded_file is not None:
 
     # Option to delete specific columns
     st.write("### Delete Columns")
-    st.write("""
-    #### Description
-    This section allows users to delete specific columns from the dataset.
-    """)
+    st.write("#### Description\nThis section allows users to delete specific columns from the dataset.")
     columns_to_delete = st.multiselect("Select columns to delete", df.columns.tolist())
     if columns_to_delete:
         df = df.drop(columns=columns_to_delete)
@@ -80,10 +66,7 @@ if uploaded_file is not None:
 
     # Display the number of missing values per column
     st.write("### Missing Values per Column")
-    st.write("""
-    #### Description
-    This section displays the number of missing values in each column of the dataset. Identifying columns with missing values is a crucial step before handling them.
-    """)
+    st.write("#### Description\nThis section displays the number of missing values in each column of the dataset. Identifying columns with missing values is a crucial step before handling them.")
     missing_values = df.isnull().sum().reset_index()
     missing_values.columns = ['Column', 'Missing Values']
     st.write(missing_values)
@@ -275,10 +258,7 @@ if uploaded_file is not None:
 
     # Visualization of the cleaned data
     st.write("### Data Visualization")
-    st.write("""
-    #### Description
-    Visualizing data helps in understanding the distribution and relationships between features. This section provides options for creating various types of plots.
-    """)
+    st.write("#### Description\nVisualizing data helps in understanding the distribution and relationships between features. This section provides options for creating various types of plots.")
 
     # Number of graphs
     num_graphs = st.number_input("Select number of graphs to create", min_value=1, max_value=10, step=1, value=1)
@@ -289,67 +269,60 @@ if uploaded_file is not None:
                                  ["Histogram", "Box Plot", "Scatter Plot", "Line Plot", "Bar Plot", "Heatmap",
                                   "Pair Plot", "Violin Plot", "Pie Chart", "Area Plot", "Density Plot"],
                                  key=f"plot_type_{i}")
-        x_column = st.selectbox(f"Select x-axis column for graph {i + 1}", df_cleaned.columns.tolist(),
-                                key=f"x_column_{i}")
-        y_column = st.selectbox(f"Select y-axis column for graph {i + 1} (if applicable)", df_cleaned.columns.tolist(),
-                                key=f"y_column_{i}")
+        x_column = st.selectbox(f"Select x-axis column for graph {i + 1}", df_cleaned.columns.tolist(), key=f"x_column_{i}")
+        y_column = st.selectbox(f"Select y-axis column for graph {i + 1} (if applicable)", df_cleaned.columns.tolist(), key=f"y_column_{i}")
         color = st.color_picker(f"Select color for graph {i + 1}", "#69b3a2", key=f"color_{i}")
-        if plot_type == "Scatter Plot":
-            marker = st.selectbox(f"Select marker shape for graph {i + 1}", ["o", "s", "^", "D", "v"],
-                                  key=f"marker_{i}")
-        else:
-            marker = "o"
-        line_width = st.slider(f"Select line width for graph {i + 1}", min_value=0.5, max_value=5.0, step=0.1,
-                               value=1.5, key=f"line_width_{i}")
+        marker = st.selectbox(f"Select marker shape for graph {i + 1}", ["o", "s", "^", "D", "v"], key=f"marker_{i}") if plot_type == "Scatter Plot" else "o"
+        line_width = st.slider(f"Select line width for graph {i + 1}", min_value=0.5, max_value=5.0, step=0.1, value=1.5, key=f"line_width_{i}")
         title = st.text_input(f"Enter title for graph {i + 1}", key=f"title_{i}")
+        hue = st.selectbox(f"Select column for color encoding (optional)", [None] + df_cleaned.columns.tolist(), key=f"hue_{i}")
 
         if plot_type == "Histogram":
             plt.figure(figsize=(10, 4))
-            sns.histplot(df_cleaned[x_column], kde=True, color=color)
+            sns.histplot(df_cleaned, x=x_column, hue=hue, kde=True, element="step", palette="coolwarm", alpha=0.5)
             plt.title(title)
             st.pyplot(plt)
         elif plot_type == "Box Plot":
             plt.figure(figsize=(10, 4))
-            sns.boxplot(x=df_cleaned[x_column], color=color)
+            sns.boxplot(x=x_column, y=y_column, hue=hue, data=df_cleaned, palette="coolwarm")
             plt.title(title)
             st.pyplot(plt)
         elif plot_type == "Scatter Plot":
             plt.figure(figsize=(10, 4))
-            plt.scatter(df_cleaned[x_column], df_cleaned[y_column], color=color, marker=marker)
+            sns.scatterplot(x=x_column, y=y_column, hue=hue, data=df_cleaned, palette="coolwarm", style=hue, markers=marker)
             plt.xlabel(x_column)
             plt.ylabel(y_column)
             plt.title(title)
             st.pyplot(plt)
         elif plot_type == "Line Plot":
             plt.figure(figsize=(10, 4))
-            plt.plot(df_cleaned[x_column], df_cleaned[y_column], color=color, linewidth=line_width)
+            sns.lineplot(x=x_column, y=y_column, hue=hue, data=df_cleaned, palette="coolwarm", linewidth=line_width)
             plt.xlabel(x_column)
             plt.ylabel(y_column)
             plt.title(title)
             st.pyplot(plt)
         elif plot_type == "Bar Plot":
             plt.figure(figsize=(10, 4))
-            sns.barplot(x=df_cleaned[x_column], y=df_cleaned[y_column], color=color)
+            sns.barplot(x=x_column, y=y_column, hue=hue, data=df_cleaned, palette="coolwarm")
             plt.title(title)
             st.pyplot(plt)
         elif plot_type == "Heatmap":
             plt.figure(figsize=(10, 4))
-            sns.heatmap(df_cleaned[[x_column, y_column]].corr(), annot=True, cmap="coolwarm")
+            sns.heatmap(df_cleaned.corr(), annot=True, fmt='.2f', cmap='coolwarm')
             plt.title(title)
             st.pyplot(plt)
         elif plot_type == "Pair Plot":
-            sns.pairplot(df_cleaned[[x_column, y_column]])
+            sns.pairplot(df_cleaned, hue=hue, palette="coolwarm")
             plt.suptitle(title, y=1.02)
             st.pyplot(plt)
         elif plot_type == "Violin Plot":
             plt.figure(figsize=(10, 4))
-            sns.violinplot(x=df_cleaned[x_column], palette="Set2")
+            sns.violinplot(x=x_column, y=y_column, hue=hue, data=df_cleaned, palette="coolwarm")
             plt.title(title)
             st.pyplot(plt)
         elif plot_type == "Pie Chart":
             plt.figure(figsize=(8, 8))
-            df_cleaned[x_column].value_counts().plot.pie(autopct='%1.1f%%', colors=sns.color_palette("Set2", len(
-                df_cleaned[x_column].unique())))
+            df_cleaned[x_column].value_counts().plot.pie(autopct='%1.1f%%', colors=sns.color_palette("Set2", len(df_cleaned[x_column].unique())))
             plt.title(title)
             st.pyplot(plt)
         elif plot_type == "Area Plot":
@@ -359,7 +332,7 @@ if uploaded_file is not None:
             st.pyplot(plt)
         elif plot_type == "Density Plot":
             plt.figure(figsize=(10, 4))
-            sns.kdeplot(df_cleaned[x_column], shade=True, color=color)
+            sns.kdeplot(df_cleaned[x_column], hue=hue, shade=True, palette="coolwarm")
             plt.title(title)
             st.pyplot(plt)
         else:
@@ -519,6 +492,22 @@ if uploaded_file is not None:
                 plt.title("Random Forest Classifier")
                 st.pyplot(plt)
 
+                # ROC Curve
+                st.write("### ROC Curve")
+                y_prob = model.predict_proba(X)[:, 1]
+                fpr, tpr, thresholds = roc_curve(y, y_prob)
+                roc_auc = auc(fpr, tpr)
+                plt.figure(figsize=(10, 8))
+                plt.plot(fpr, tpr, color='darkorange', lw=2, label='ROC curve (area = %0.2f)' % roc_auc)
+                plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+                plt.xlim([0.0, 1.0])
+                plt.ylim([0.0, 1.05])
+                plt.xlabel('False Positive Rate')
+                plt.ylabel('True Positive Rate')
+                plt.title('Receiver Operating Characteristic')
+                plt.legend(loc="lower right")
+                st.pyplot(plt)
+
         # Prediction Evaluation
         st.write("#### Prediction Evaluation")
         if prediction_task == "Regression":
@@ -537,8 +526,7 @@ if uploaded_file is not None:
     """)
     pca_analysis = st.checkbox("Perform PCA Analysis")
     if pca_analysis:
-        n_components = st.slider("Select number of PCA components", 1,
-                                 min(len(df_normalized.select_dtypes(include=[np.number]).columns), 10), 2)
+        n_components = st.slider("Select number of PCA components", 1, min(len(df_normalized.select_dtypes(include=[np.number]).columns), 10), 2)
         pca = PCA(n_components=n_components)
         pca_components = pca.fit_transform(df_normalized.select_dtypes(include=[np.number]))
         pca_df = pd.DataFrame(pca_components, columns=[f"PC{i + 1}" for i in range(n_components)])
@@ -555,8 +543,5 @@ if uploaded_file is not None:
 
         # Most important features
         st.write("### Most Important Features")
-        most_important_features = pd.DataFrame(pca.components_.T,
-                                               index=df_normalized.select_dtypes(include=[np.number]).columns,
-                                               columns=[f"PC{i + 1}" for i in range(n_components)])
+        most_important_features = pd.DataFrame(pca.components_.T, index=df_normalized.select_dtypes(include=[np.number]).columns, columns=[f"PC{i + 1}" for i in range(n_components)])
         st.write(most_important_features)
-
