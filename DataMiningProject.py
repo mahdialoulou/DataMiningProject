@@ -2,12 +2,13 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from sklearn.impute import KNNImputer
-from sklearn.preprocessing import MinMaxScaler, StandardScaler, RobustScaler, Normalizer, PowerTransformer, QuantileTransformer, LabelEncoder, MultiLabelBinarizer
+from sklearn.preprocessing import MinMaxScaler, StandardScaler, RobustScaler, Normalizer, PowerTransformer, \
+    QuantileTransformer, LabelEncoder, MultiLabelBinarizer
 from sklearn.cluster import KMeans, DBSCAN, AgglomerativeClustering
 from sklearn.decomposition import PCA
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import mean_squared_error, accuracy_score
+from sklearn.metrics import mean_squared_error, accuracy_score, precision_score, recall_score, f1_score
 import matplotlib.pyplot as plt
 import seaborn as sns
 from minisom import MiniSom  # Assuming you have the MiniSom library installed
@@ -232,7 +233,7 @@ if uploaded_file is not None:
     - **Quantile Transformation**: Transforms data to follow a uniform or normal distribution.
 
     ##### How to Use
-    Select the normalization method from the dropdown. Select the columns to apply normalization on. The application will display the dataset after applying the selected normalization method.
+    Select the normalization method from the dropdown. The application will display the dataset after applying the selected normalization method.
 
     ##### Interpretation
     - **No Normalization**: Keeps data in its original scale.
@@ -248,34 +249,26 @@ if uploaded_file is not None:
                                          "Robust Scaling", "Normalization", "Power Transformation",
                                          "Quantile Transformation"])
 
-    cols_to_normalize = st.multiselect("Select columns to apply normalization", df_cleaned.select_dtypes(include=[np.number]).columns.tolist())
+    numeric_cols_to_normalize = st.multiselect("Select numeric columns to apply normalization",
+                                               df_cleaned.select_dtypes(include=[np.number]).columns.tolist())
 
-    if normalization_option == "No Normalization":
-        df_normalized = df_cleaned.copy()
-    elif normalization_option == "Min-Max Normalization":
-        scaler = MinMaxScaler()
-        df_normalized = df_cleaned.copy()
-        df_normalized[cols_to_normalize] = scaler.fit_transform(df_cleaned[cols_to_normalize])
-    elif normalization_option == "Z-score Standardization":
-        scaler = StandardScaler()
-        df_normalized = df_cleaned.copy()
-        df_normalized[cols_to_normalize] = scaler.fit_transform(df_cleaned[cols_to_normalize])
-    elif normalization_option == "Robust Scaling":
-        scaler = RobustScaler()
-        df_normalized = df_cleaned.copy()
-        df_normalized[cols_to_normalize] = scaler.fit_transform(df_cleaned[cols_to_normalize])
-    elif normalization_option == "Normalization":
-        scaler = Normalizer()
-        df_normalized = df_cleaned.copy()
-        df_normalized[cols_to_normalize] = scaler.fit_transform(df_cleaned[cols_to_normalize])
-    elif normalization_option == "Power Transformation":
-        scaler = PowerTransformer()
-        df_normalized = df_cleaned.copy()
-        df_normalized[cols_to_normalize] = scaler.fit_transform(df_cleaned[cols_to_normalize])
-    elif normalization_option == "Quantile Transformation":
-        scaler = QuantileTransformer()
-        df_normalized = df_cleaned.copy()
-        df_normalized[cols_to_normalize] = scaler.fit_transform(df_cleaned[cols_to_normalize])
+    df_normalized = df_cleaned.copy()
+
+    if normalization_option != "No Normalization" and numeric_cols_to_normalize:
+        if normalization_option == "Min-Max Normalization":
+            scaler = MinMaxScaler()
+        elif normalization_option == "Z-score Standardization":
+            scaler = StandardScaler()
+        elif normalization_option == "Robust Scaling":
+            scaler = RobustScaler()
+        elif normalization_option == "Normalization":
+            scaler = Normalizer()
+        elif normalization_option == "Power Transformation":
+            scaler = PowerTransformer()
+        elif normalization_option == "Quantile Transformation":
+            scaler = QuantileTransformer()
+
+        df_normalized[numeric_cols_to_normalize] = scaler.fit_transform(df_cleaned[numeric_cols_to_normalize])
 
     st.write("### Data after normalization")
     st.write(df_normalized)
@@ -405,6 +398,7 @@ if uploaded_file is not None:
             plt.figure(figsize=(10, 4))
             sns.scatterplot(x=pca_components[:, 0], y=pca_components[:, 1], hue=clusters, palette="viridis")
             plt.title("K-Means Clustering")
+            plt.legend()
             st.pyplot(plt)
             st.write("Cluster Centers:")
             st.write(kmeans.cluster_centers_)
@@ -441,11 +435,12 @@ if uploaded_file is not None:
             st.write(pd.Series(clusters).value_counts())
         elif clustering_algorithm == "Self-Organizing Maps (SOM)":
             som_size = st.slider("Select SOM grid size", 1, 10)
-            som = MiniSom(som_size, som_size, len(cols_to_normalize), sigma=0.3, learning_rate=0.5)
-            som.train_random(df_normalized[cols_to_normalize].to_numpy(), 100)
-            win_map = som.win_map(df_normalized[cols_to_normalize].to_numpy())
+            som = MiniSom(som_size, som_size, df_normalized.select_dtypes(include=[np.number]).shape[1], sigma=0.3,
+                          learning_rate=0.5)
+            som.train_random(df_normalized.select_dtypes(include=[np.number]).to_numpy(), 100)
+            win_map = som.win_map(df_normalized.select_dtypes(include=[np.number]).to_numpy())
             clusters = np.zeros(df_normalized.shape[0], dtype=int)
-            for i, x in enumerate(df_normalized[cols_to_normalize].to_numpy()):
+            for i, x in enumerate(df_normalized.select_dtypes(include=[np.number]).to_numpy()):
                 winner = som.winner(x)
                 if winner in win_map:
                     clusters[i] = list(win_map.keys()).index(winner)
@@ -466,6 +461,13 @@ if uploaded_file is not None:
         st.write("Cluster statistics:")
         cluster_stats = df_normalized.groupby('Cluster').size().reset_index(name='Counts')
         st.write(cluster_stats)
+
+        if clustering_algorithm == "K-Means":
+            st.write("Cluster Centers:")
+            st.write(kmeans.cluster_centers_)
+        elif clustering_algorithm == "DBSCAN":
+            st.write("Cluster Density (number of points per cluster):")
+            st.write(pd.Series(clusters).value_counts())
 
     if task_option in ["Prediction", "Both"]:
         # Prediction
@@ -508,6 +510,9 @@ if uploaded_file is not None:
                 predictions = model.predict(X)
                 st.write("### Classification Results")
                 st.write("Accuracy Score:", accuracy_score(y, predictions))
+                st.write("Precision Score:", precision_score(y, predictions, average='weighted'))
+                st.write("Recall Score:", recall_score(y, predictions, average='weighted'))
+                st.write("F1 Score:", f1_score(y, predictions, average='weighted'))
                 plt.figure(figsize=(10, 4))
                 sns.heatmap(pd.crosstab(y, predictions, rownames=['Actual'], colnames=['Predicted']), annot=True,
                             fmt="d", cmap="YlGnBu")
@@ -520,3 +525,38 @@ if uploaded_file is not None:
             st.write("Mean Squared Error:", mean_squared_error(y, predictions))
         elif prediction_task == "Classification":
             st.write("Accuracy Score:", accuracy_score(y, predictions))
+            st.write("Precision Score:", precision_score(y, predictions, average='weighted'))
+            st.write("Recall Score:", recall_score(y, predictions, average='weighted'))
+            st.write("F1 Score:", f1_score(y, predictions, average='weighted'))
+
+    # PCA Analysis
+    st.write("### PCA Analysis")
+    st.write("""
+    #### Description
+    PCA (Principal Component Analysis) is used to reduce the dimensionality of data while preserving as much variability as possible. This section provides an option to perform PCA and visualize the results.
+    """)
+    pca_analysis = st.checkbox("Perform PCA Analysis")
+    if pca_analysis:
+        n_components = st.slider("Select number of PCA components", 1,
+                                 min(len(df_normalized.select_dtypes(include=[np.number]).columns), 10), 2)
+        pca = PCA(n_components=n_components)
+        pca_components = pca.fit_transform(df_normalized.select_dtypes(include=[np.number]))
+        pca_df = pd.DataFrame(pca_components, columns=[f"PC{i + 1}" for i in range(n_components)])
+        st.write("### PCA Components")
+        st.write(pca_df)
+
+        # Correlation matrix
+        st.write("### Correlation Matrix")
+        corr_matrix = df_normalized.corr()
+        plt.figure(figsize=(20, 8))
+        sns.heatmap(corr_matrix, annot=True, cmap="coolwarm")
+        st.pyplot(plt)
+        st.write(corr_matrix)
+
+        # Most important features
+        st.write("### Most Important Features")
+        most_important_features = pd.DataFrame(pca.components_.T,
+                                               index=df_normalized.select_dtypes(include=[np.number]).columns,
+                                               columns=[f"PC{i + 1}" for i in range(n_components)])
+        st.write(most_important_features)
+
